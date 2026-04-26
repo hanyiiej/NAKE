@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login - NAKE{% endblock %}
+
+{% block extra_head %}
+<style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-box">
+        <h2>🔐 Admin Login</h2>
+        
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+        
+        <form action="/login" method="post">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        
+        <p style="text-align: center; margin-top: 1.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+            Default: admin / admin123
+        </p>
+    </div>
+</div>
+{% endblock %}

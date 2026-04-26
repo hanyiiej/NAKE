@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name }} - NAKE{% endblock %}
+
+{% block content %}
+<div class="container">
+    <section class="hero" style="padding: 2rem 2rem; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="font-size: 3rem;">
+                {% if category.icon == 'wrench' %}🔧
+                {% elif category.icon == 'fire' %}🔥
+                {% elif category.icon == 'star' %}⭐
+                {% else %}📁{% endif %}
+            </div>
+            <div>
+                <h1 style="font-size: 2rem; margin-bottom: 0.5rem;">{{ category.name }}</h1>
+                <p style="color: var(--text-secondary); margin: 0;">{{ category.description or 'Explore articles in this category' }}</p>
+            </div>
+        </div>
+    </section>
+    
+    <section style="padding: 2rem 0;">
+        {% if articles %}
+        <div class="article-list">
+            {% for article in articles %}
+            <article class="article-card">
+                <div class="article-thumb">
+                    {% if article.image_url %}
+                    <img src="{{ article.image_url }}" alt="{{ article.title }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    {% else %}
+                    📝
+                    {% endif %}
+                </div>
+                <div class="article-info">
+                    <div class="article-meta">
+                        <span>📅 {{ article.created_at.strftime('%Y-%m-%d') }}</span>
+                        <span>👁 {{ article.view_count }} views</span>
+                    </div>
+                    <h3><a href="/article/{{ article.slug }}">{{ article.title }}</a></h3>
+                    <p class="article-summary">{{ article.summary or article.content[:150] }}...</p>
+                    <div class="article-stats">
+                        <a href="/article/{{ article.slug }}" class="read-more">Read More →</a>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="/category/{{ category.slug }}?page={{ page - 1 }}">← Prev</a>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="active">{{ p }}</span>
+                {% else %}
+                <a href="/category/{{ category.slug }}?page={{ p }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+            <a href="/category/{{ category.slug }}?page={{ page + 1 }}">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
+            <p style="font-size: 1.5rem;">📭 No articles yet in this category.</p>
+            <p style="margin-top: 1rem;">Check back soon or explore other categories.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

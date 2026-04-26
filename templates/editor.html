@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if article %}Edit{% else %}New Post{% endif %} - NAKE</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #000; min-height: 100vh; }
+        .editor-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 3px solid #ffa500;
+            margin-bottom: 2rem;
+        }
+        .editor-header h1 { font-size: 1.5rem; color: #fff; }
+        .editor-header h1 span { color: #ffa500; }
+        .btn {
+            padding: 0.75rem 2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-publish { background: #ffa500; color: #000; }
+        .btn-publish:hover { background: #ff0055; color: #fff; }
+        .btn-cancel { background: #222; color: #999; margin-right: 1rem; }
+        .btn-cancel:hover { background: #333; color: #fff; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label {
+            display: block;
+            color: #999;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+        }
+        .form-label span { color: #ff0055; }
+        .form-input {
+            width: 100%;
+            padding: 1rem;
+            background: #111;
+            border: 2px solid #333;
+            color: #fff;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        .form-input:focus { outline: none; border-color: #ffa500; }
+        .title-input {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .content-wrapper {
+            border: 2px solid #333;
+            background: #111;
+            min-height: 500px;
+        }
+        .content-wrapper:focus-within { border-color: #ffa500; }
+        .content-input {
+            width: 100%;
+            min-height: 500px;
+            padding: 2rem 2.5rem;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            resize: none;
+        }
+        .content-input:focus { outline: none; }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        select.form-input { cursor: pointer; }
+        .note {
+            color: #666;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        .upload-hint {
+            color: #666;
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .upload-hint::before {
+            content: '📋';
+        }
+        .drop-zone {
+            border: 2px dashed #333;
+            padding: 2rem;
+            text-align: center;
+            color: #666;
+            margin-bottom: 1rem;
+            transition: all 0.3s;
+        }
+        .drop-zone.dragover {
+            border-color: #ffa500;
+            background: rgba(255, 165, 0, 0.1);
+            color: #ffa500;
+        }
+        @media (max-width: 600px) {
+            .form-row { grid-template-columns: 1fr; }
+            .editor-header { flex-direction: column; gap: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <header class="editor-header">
+            <h1>{% if article %}✏️ Edit<span> Post</span{% else %}➕ New<span> Post</span{% endif %}</h1>
+            <div>
+                <a href="/admin" class="btn btn-cancel">Cancel</a>
+                <button type="button" class="btn btn-publish" onclick="submitForm()">Publish</button>
+            </div>
+        </header>
+        
+        <form id="editor-form" method="post" action="{% if article %}/admin/article/{{ article.id }}/update{% else %}/admin/article{% endif %}">
+            <div class="form-group">
+                <label class="form-label">Title <span>*</span></label>
+                <input type="text" name="title" class="form-input title-input" required
+                       value="{{ article.title if article else '' }}"
+                       placeholder="Enter title...">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Cover Image <span>*</span></label>
+                <div class="drop-zone" id="cover-drop" onclick="document.getElementById('cover-file').click()">
+                    <p>📷 Click to upload or drag & drop cover image</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Paste image directly (Ctrl+V)</p>
+                </div>
+                <input type="file" id="cover-file" accept="image/*" style="display: none;" onchange="handleCoverUpload(this)">
+                <input type="hidden" name="image_url" id="image-url" value="{{ article.image_url if article else '' }}">
+                <div id="cover-preview" style="margin-top: 1rem;">
+                    {% if article and article.image_url %}
+                    <img src="{{ article.image_url }}" style="max-width: 300px; max-height: 150px; border: 2px solid #333;">
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Content <span>*</span></label>
+                <div class="content-wrapper">
+                    <textarea name="content" id="content-area" class="content-input" required
+                              placeholder="Write your content here...&#10;&#10;Supports:&#10;- **Bold** *italic*&#10;- # Headings&#10;- ```code blocks```&#10;- ![image](url) or paste images directly&#10;- Lists, quotes, links..."
+                              spellcheck="false">{{ article.content if article else '' }}</textarea>
+                </div>
+                <p class="upload-hint">Paste images directly into editor (Ctrl+V) or drag & drop</p>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Category <span>*</span></label>
+                    <select name="category_id" class="form-input" required>
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if article and article.category_id == cat.id %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Summary <span>*</span></label>
+                    <input type="text" name="summary" class="form-input" required
+                           value="{{ article.summary if article else '' }}"
+                           placeholder="Brief summary...">
+                </div>
+            </div>
+            
+            <input type="hidden" name="slug" id="slug-input" value="{{ article.slug if article else '' }}">
+            <input type="hidden" name="status" value="published">
+        </form>
+    </div>
+    
+    <script>
+        const titleInput = document.querySelector('input[name="title"]');
+        const slugInput = document.getElementById('slug-input');
+        const contentArea = document.getElementById('content-area');
+        const coverDrop = document.getElementById('cover-drop');
+        const imageUrlInput = document.getElementById('image-url');
+        const coverPreview = document.getElementById('cover-preview');
+        
+        // Auto slug
+        titleInput.addEventListener('input', function() {
+            slugInput.value = slugify(this.value);
+        });
+        
+        function slugify(text) {
+            return text.toLowerCase()
+                .replace(/[^\w\s-]/g, '')
+                .replace(/[\s_-]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+        
+        // Cover image upload - click
+        function handleCoverUpload(fileInput) {
+            const file = fileInput.files[0];
+            if (file) uploadImage(file, 'cover');
+        }
+        
+        // Cover image - drag & drop
+        coverDrop.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            coverDrop.classList.add('dragover');
+        });
+        coverDrop.addEventListener('dragleave', () => coverDrop.classList.remove('dragover'));
+        coverDrop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            coverDrop.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                uploadImage(file, 'cover');
+            }
+        });
+        
+        // Cover image - paste
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+                if (item.type.startsWith('image/') && !document.activeElement.classList.contains('content-input')) {
+                    e.preventDefault();
+                    uploadImage(item.getAsFile(), 'cover');
+                    break;
+                }
+            }
+        });
+        
+        // Content area - paste images
+        contentArea.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    uploadImage(file, 'content');
+                    break;
+                }
+            }
+        });
+        
+        // Content area - drag & drop images
+        contentArea.addEventListener('dragover', (e) => e.preventDefault());
+        contentArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            for (let file of files) {
+                if (file.type.startsWith('image/')) {
+                    uploadImage(file, 'content');
+                    break;
+                }
+            }
+        });
+        
+        // Upload image (convert to base64 for simplicity)
+        function uploadImage(file, target) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                if (target === 'cover') {
+                    imageUrlInput.value = dataUrl;
+                    coverPreview.innerHTML = `<img src="${dataUrl}" style="max-width: 300px; max-height: 150px; border: 2px solid #333;">`;
+                } else {
+                    // Insert markdown image at cursor
+                    const markdown = `![${file.name}](${dataUrl})\n`;
+                    const start = contentArea.selectionStart;
+                    const end = contentArea.selectionEnd;
+                    const text = contentArea.value;
+                    contentArea.value = text.substring(0, start) + markdown + text.substring(end);
+                    contentArea.selectionStart = contentArea.selectionEnd = start + markdown.length;
+                    contentArea.focus();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Submit
+        function submitForm() {
+            const title = document.querySelector('input[name="title"]').value.trim();
+            const content = contentArea.value.trim();
+            const image_url = imageUrlInput.value.trim();
+            const summary = document.querySelector('input[name="summary"]').value.trim();
+            
+            if (!title) { alert('Title is required!'); return; }
+            if (!content) { alert('Content is required!'); return; }
+            if (!image_url) { alert('Cover image is required!'); return; }
+            if (!summary) { alert('Summary is required!'); return; }
+            
+            document.getElementById('editor-form').submit();
+        }
+    </script>
+</body>
+</html>

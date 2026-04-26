@@ -1,0 +1,49 @@
+# ===========================
+# NAKE Blog - .gitignore
+# ===========================
+
+# 环境变量（含密码，绝对不能上传！）
+.env
+.env.local
+.env.*.local
+
+# 数据库文件（本地数据，不上传）
+*.db
+*.sqlite
+*.sqlite3
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# 虚拟环境
+venv/
+env/
+.venv/
+.env/
+
+# 上传的文件（用户上传内容，不上传到 git）
+uploads/*
+!uploads/.gitkeep
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+logs/
+
+# 分发/构建
+dist/
+build/
+*.egg-info/

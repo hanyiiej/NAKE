@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}My Blog{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/marked.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <a href="/" class="logo">NAKE<span class="dot">.</span></a>
+            <nav>
+                <ul class="nav-links">
+                    {% for cat in categories %}
+                    <li><a href="/category/{{ cat.slug }}">{{ cat.name }}</a></li>
+                    {% endfor %}
+                    {% if admin %}
+                    <li><a href="/admin" class="admin-badge">Admin</a></li>
+                    {% else %}
+                    <li><a href="/login">Login</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+    
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="footer">
+        <p>&copy; 2024 NAKE - New Ample Knowledage Eye</p>
+    </footer>
+    
+    <script src="/static/js/main.js"></script>
+    <script>hljs.highlightAll();</script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
