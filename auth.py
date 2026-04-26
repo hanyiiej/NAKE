@@ -5,7 +5,7 @@ import os
 
 # 从环境变量读取，本地开发有默认值，生产环境必须设置
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
-PASSWORD_SALT = os.getenv("PASSWORD_SALT", "dev-salt-change-in-production")
+PASSWORD_SALT = os.getenv("PASSWORD_SALT", "dev-salt-change-in-production") or "fallback-salt"
 SESSION_EXPIRE_HOURS = 24
 
 sessions = {}
