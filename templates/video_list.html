@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>视频 - NAKE</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d0d0f;
+      color: #e8e8e8;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    /* ── 顶部导航 ── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      background: #111114;
+      border-bottom: 1px solid #222;
+    }
+    nav a.logo { color: #fff; font-size: 20px; font-weight: 700; text-decoration: none; letter-spacing: 1px; }
+    nav a.logo span { color: #7c6aff; }
+    nav .nav-links a { color: #aaa; text-decoration: none; margin-left: 24px; font-size: 14px; transition: color .2s; }
+    nav .nav-links a:hover { color: #fff; }
+
+    /* ── 主体 ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+    h1 { font-size: 28px; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+
+    /* ── 上传区 ── */
+    .upload-box {
+      border: 2px dashed #333;
+      border-radius: 16px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      margin-bottom: 40px;
+      position: relative;
+    }
+    .upload-box:hover, .upload-box.dragover {
+      border-color: #7c6aff;
+      background: rgba(124,106,255,.06);
+    }
+    .upload-box input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-box p { color: #888; font-size: 15px; margin-bottom: 6px; }
+    .upload-box .hint { font-size: 12px; color: #555; }
+    .btn {
+      display: inline-block;
+      padding: 10px 28px;
+      background: #7c6aff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn:hover { background: #6757e8; }
+    .btn:disabled { background: #444; cursor: not-allowed; }
+
+    /* 上传进度 */
+    #upload-status {
+      margin-bottom: 24px;
+      padding: 16px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      display: none;
+    }
+    #upload-status.info  { background: #1a1a2e; border: 1px solid #333; color: #aaa; }
+    #upload-status.ok    { background: #0d2011; border: 1px solid #1a4a25; color: #4ade80; }
+    #upload-status.error { background: #2a0a0a; border: 1px solid #5a1515; color: #f87171; }
+    .progress-bar { width: 100%; height: 6px; background: #222; border-radius: 3px; margin-top: 10px; overflow: hidden; display: none; }
+    .progress-fill { height: 100%; background: #7c6aff; border-radius: 3px; width: 0%; transition: width .3s; }
+
+    /* ── 视频列表 ── */
+    .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #ccc; }
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .video-card {
+      background: #16161a;
+      border: 1px solid #222;
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color .2s, transform .15s;
+      text-decoration: none;
+    }
+    .video-card:hover { border-color: #7c6aff; transform: translateY(-2px); }
+    .card-thumb {
+      width: 100%; height: 160px;
+      background: #0d0d0f;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px;
+      position: relative;
+    }
+    .card-thumb .status-badge {
+      position: absolute; top: 10px; right: 10px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-done       { background: #14532d; color: #4ade80; }
+    .badge-processing { background: #1e3a5f; color: #60a5fa; }
+    .badge-pending    { background: #2d2d2d; color: #9ca3af; }
+    .badge-error      { background: #450a0a; color: #f87171; }
+    .card-body { padding: 14px 16px; }
+    .card-title { font-size: 15px; font-weight: 600; color: #e8e8e8; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-meta { font-size: 12px; color: #555; }
+
+    /* 空状态 */
+    .empty { text-align: center; padding: 60px 0; color: #444; }
+    .empty .icon { font-size: 56px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">N<span>A</span>KE</a>
+  <div class="nav-links">
+    <a href="/">博客</a>
+    <a href="/videos">视频</a>
+    {% if admin %}<a href="/admin">管理</a>{% endif %}
+  </div>
+</nav>
+
+<div class="container">
+  <h1>🎬 视频播放器</h1>
+  <p class="subtitle">上传 MP4，自动识别语音生成中英双字幕</p>
+
+  <!-- 上传区 -->
+  <div class="upload-box" id="upload-box">
+    <input type="file" id="file-input" accept="video/mp4,video/*">
+    <div class="upload-icon">📤</div>
+    <p>点击或拖拽视频文件到这里</p>
+    <p class="hint">支持 MP4、MOV、AVI、MKV 等格式，建议 < 500MB</p>
+  </div>
+
+  <div id="upload-status">
+    <span id="status-text"></span>
+    <div class="progress-bar" id="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- 视频列表 -->
+  <div class="section-title">已上传视频（{{ videos|length }}）</div>
+
+  {% if videos %}
+  <div class="video-grid">
+    {% for v in videos %}
+    <a class="video-card" href="/videos/{{ v.id }}">
+      <div class="card-thumb">
+        🎞️
+        <span class="status-badge badge-{{ v.status }}">
+          {% if v.status == 'done' %}✅ 完成
+          {% elif v.status == 'processing' %}⏳ 处理中
+          {% elif v.status == 'pending' %}🕐 等待中
+          {% else %}❌ 出错{% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="card-title">{{ v.title }}</div>
+        <div class="card-meta">
+          {% if v.duration %}{{ "%.0f"|format(v.duration // 60) }}分{{ "%.0f"|format(v.duration % 60) }}秒 · {% endif %}
+          {% if v.detected_language %}语言: {{ v.detected_language }} · {% endif %}
+          {{ v.created_at.strftime('%m-%d %H:%M') }}
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="icon">🎬</div>
+    <p>还没有视频，快来上传第一个吧</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+const uploadBox = document.getElementById('upload-box');
+const fileInput = document.getElementById('file-input');
+const statusDiv = document.getElementById('upload-status');
+const statusText = document.getElementById('status-text');
+const progressBar = document.getElementById('progress-bar');
+const progressFill = document.getElementById('progress-fill');
+
+// 拖拽高亮
+uploadBox.addEventListener('dragover', e => { e.preventDefault(); uploadBox.classList.add('dragover'); });
+uploadBox.addEventListener('dragleave', () => uploadBox.classList.remove('dragover'));
+uploadBox.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadBox.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) uploadFile(fileInput.files[0]);
+});
+
+function showStatus(msg, type='info') {
+  statusDiv.className = type;
+  statusDiv.style.display = 'block';
+  statusText.textContent = msg;
+}
+
+function uploadFile(file) {
+  const allowed = ['video/mp4','video/quicktime','video/x-msvideo','video/x-matroska','video/webm'];
+  if (!file.type.startsWith('video/')) {
+    showStatus('请上传视频文件', 'error'); return;
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('title', file.name.replace(/\.[^.]+$/, ''));
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/videos/upload');
+
+  showStatus('上传中...', 'info');
+  progressBar.style.display = 'block';
+
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) {
+      const pct = Math.round(e.loaded / e.total * 100);
+      progressFill.style.width = pct + '%';
+      statusText.textContent = `上传中... ${pct}%`;
+    }
+  });
+
+  xhr.addEventListener('load', () => {
+    if (xhr.status === 200) {
+      const data = JSON.parse(xhr.responseText);
+      showStatus('✅ 上传成功！正在后台处理字幕，请稍后刷新页面...', 'ok');
+      progressBar.style.display = 'none';
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      showStatus('❌ 上传失败: ' + (JSON.parse(xhr.responseText)?.detail || xhr.statusText), 'error');
+      progressBar.style.display = 'none';
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    showStatus('❌ 网络错误，上传失败', 'error');
+    progressBar.style.display = 'none';
+  });
+
+  xhr.send(formData);
+}
+</script>
+</body>
+</html>

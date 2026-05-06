@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, Form, Response, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Request, Depends, HTTPException, Form, Response, Cookie, UploadFile, File, BackgroundTasks
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
-import os
+import os, uuid, logging, threading
 
 # 加载 .env 文件（本地开发用）
 try:
@@ -9,6 +9,9 @@ try:
     load_dotenv()
 except ImportError:
     pass  # 生产环境直接用系统环境变量，无需 dotenv
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class PreviewRequest(BaseModel):
     content: str
@@ -20,12 +23,19 @@ from datetime import datetime
 from typing import Optional
 import math
 
-from database import get_db, init_db, Category, Article, Admin
+from database import get_db, init_db, Category, Article, Admin, Video
 from schemas import ArticleCreate, ArticleUpdate, LoginRequest
 from auth import hash_password, verify_password, create_session, verify_session, get_session_admin, delete_session
 from markdown_utils import render_markdown, slugify
+from video_processor import process_video_subtitles
 
-app = FastAPI(title="NAKE - New Ample Knowledage Eye", description="A personal blog with markdown support")
+app = FastAPI(title="NAKE - New Ample Knowledge Eye", description="A personal blog with markdown support")
+
+# 目录
+VIDEOS_DIR = "uploads/videos"
+SUBTITLES_DIR = "uploads/subtitles"
+os.makedirs(VIDEOS_DIR, exist_ok=True)
+os.makedirs(SUBTITLES_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -252,6 +262,162 @@ def delete_article(article_id: int, request: Request, response: Response, db: Se
 def preview_markdown(data: PreviewRequest):
     html = render_markdown(data.content)
     return JSONResponse({"html": html})
+
+
+# ===================== VIDEO ROUTES =====================
+
+def _do_process_video(video_id: int, video_path: str):
+    """后台线程：调用 Whisper 生成字幕，更新数据库状态"""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            return
+        video.status = "processing"
+        db.commit()
+
+        result = process_video_subtitles(video_id, video_path, SUBTITLES_DIR)
+        video.status = "done"
+        video.detected_language = result.get("detected_language", "")
+        video.duration = result.get("duration", 0)
+        db.commit()
+        logger.info(f"Video {video_id} processed successfully.")
+    except Exception as e:
+        logger.error(f"Video {video_id} processing failed: {e}")
+        db = SessionLocal()
+        v = db.query(Video).filter(Video.id == video_id).first()
+        if v:
+            v.status = "error"
+            v.error_msg = str(e)[:500]
+            db.commit()
+    finally:
+        db.close()
+
+
+@app.get("/videos", response_class=HTMLResponse)
+def video_list(request: Request, db: Session = Depends(get_db)):
+    admin = get_current_admin(request)
+    videos = db.query(Video).order_by(desc(Video.created_at)).all()
+    return templates.TemplateResponse("video_list.html", {
+        "request": request, "videos": videos, "admin": admin
+    })
+
+
+@app.get("/videos/{video_id}", response_class=HTMLResponse)
+def video_player(video_id: int, request: Request, db: Session = Depends(get_db)):
+    admin = get_current_admin(request)
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return templates.TemplateResponse("video_player.html", {
+        "request": request, "video": video, "admin": admin
+    })
+
+
+@app.post("/api/videos/upload")
+async def upload_video(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    # 限制文件类型
+    allowed_types = {"video/mp4", "video/quicktime", "video/x-msvideo",
+                     "video/x-matroska", "video/webm", "video/mpeg"}
+    if file.content_type not in allowed_types and not (file.filename or "").lower().endswith(
+        (".mp4", ".mov", ".avi", ".mkv", ".webm", ".mpeg", ".mpg")
+    ):
+        raise HTTPException(status_code=400, detail="不支持的文件格式，请上传视频文件")
+
+    # 生成唯一文件名
+    ext = os.path.splitext(file.filename or "video.mp4")[1].lower() or ".mp4"
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    video_path = os.path.join(VIDEOS_DIR, stored_name)
+
+    # 保存文件
+    with open(video_path, "wb") as f:
+        while chunk := await file.read(1024 * 1024):  # 1MB chunks
+            f.write(chunk)
+
+    # 数据库记录
+    video_title = title.strip() or os.path.splitext(file.filename or "视频")[0]
+    video = Video(
+        title=video_title,
+        filename=stored_name,
+        original_filename=file.filename or stored_name,
+        status="pending",
+    )
+    db.add(video)
+    db.commit()
+    db.refresh(video)
+
+    # 后台线程处理（不阻塞请求）
+    t = threading.Thread(target=_do_process_video, args=(video.id, video_path), daemon=True)
+    t.start()
+
+    return JSONResponse({"id": video.id, "title": video_title, "status": "pending"})
+
+
+@app.get("/api/videos/{video_id}/status")
+def video_status(video_id: int, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Not found")
+    return JSONResponse({
+        "id": video.id,
+        "status": video.status,
+        "detected_language": video.detected_language,
+        "duration": video.duration,
+        "error_msg": video.error_msg,
+    })
+
+
+@app.get("/api/videos/{video_id}/stream")
+def stream_video(video_id: int, request: Request, db: Session = Depends(get_db)):
+    """支持 Range 请求的视频流"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Not found")
+    video_path = os.path.join(VIDEOS_DIR, video.filename)
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(video_path, media_type="video/mp4", headers={
+        "Accept-Ranges": "bytes"
+    })
+
+
+@app.get("/api/videos/{video_id}/subtitle/{lang}")
+def get_subtitle(video_id: int, lang: str, db: Session = Depends(get_db)):
+    """返回 WebVTT 字幕文件"""
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video or video.status != "done":
+        raise HTTPException(status_code=404, detail="Subtitle not ready")
+    if lang not in ("orig", "en"):
+        raise HTTPException(status_code=400, detail="lang must be orig or en")
+    vtt_path = os.path.join(SUBTITLES_DIR, f"{video_id}_{lang}.vtt")
+    if not os.path.exists(vtt_path):
+        raise HTTPException(status_code=404, detail="Subtitle file not found")
+    return FileResponse(vtt_path, media_type="text/vtt")
+
+
+@app.delete("/api/videos/{video_id}")
+def delete_video(video_id: int, db: Session = Depends(get_db)):
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Not found")
+    # 删除文件
+    for path in [
+        os.path.join(VIDEOS_DIR, video.filename),
+        os.path.join(SUBTITLES_DIR, f"{video_id}_orig.vtt"),
+        os.path.join(SUBTITLES_DIR, f"{video_id}_en.vtt"),
+    ]:
+        if os.path.exists(path):
+            os.remove(path)
+    db.delete(video)
+    db.commit()
+    return JSONResponse({"ok": True})
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -35,6 +35,19 @@ class Admin(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Video(Base):
+    __tablename__ = "videos"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    filename = Column(String(200), nullable=False)        # 存储文件名
+    original_filename = Column(String(200), nullable=False)  # 原始文件名
+    status = Column(String(20), default="pending")        # pending/processing/done/error
+    error_msg = Column(Text, nullable=True)
+    detected_language = Column(String(20), nullable=True) # whisper 检测到的语言
+    duration = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 DATABASE_URL = "sqlite:///./blog.db"

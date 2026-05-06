@@ -24,7 +24,7 @@ env/
 .venv/
 .env/
 
-# 上传的文件（用户上传内容，不上传到 git）
+# 上传的文件（视频、字幕等不上传 git）
 uploads/*
 !uploads/.gitkeep
 

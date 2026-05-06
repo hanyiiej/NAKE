@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ video.title }} - NAKE</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #080810;
+      color: #e8e8e8;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px;
+      background: rgba(10,10,18,.95);
+      border-bottom: 1px solid #1a1a2a;
+      position: sticky; top: 0; z-index: 100;
+    }
+    nav a.logo { color: #fff; font-size: 20px; font-weight: 700; text-decoration: none; }
+    nav a.logo span { color: #7c6aff; }
+    nav .nav-links a { color: #888; text-decoration: none; margin-left: 20px; font-size: 14px; transition: color .2s; }
+    nav .nav-links a:hover { color: #fff; }
+    nav .back { color: #7c6aff; text-decoration: none; font-size: 13px; margin-left: 20px; }
+    nav .back:hover { color: #a090ff; }
+
+    /* ── 播放器区域 ── */
+    .player-section {
+      max-width: 1000px; margin: 0 auto; padding: 32px 16px 0;
+    }
+    .video-title {
+      font-size: 22px; font-weight: 700; margin-bottom: 6px;
+    }
+    .video-meta {
+      font-size: 13px; color: #555; margin-bottom: 20px;
+    }
+    .video-meta span { margin-right: 16px; }
+
+    /* 播放器容器 */
+    .player-wrap {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.8);
+    }
+    video {
+      width: 100%;
+      display: block;
+      max-height: 70vh;
+      background: #000;
+      /* 隐藏原生字幕，用自定义叠加 */
+    }
+    /* 禁用原生字幕显示 */
+    video::cue { font-size: 0; color: transparent; }
+
+    /* ── 自定义双字幕叠加 ── */
+    .subtitle-overlay {
+      position: absolute;
+      bottom: 70px; /* 控制栏上方 */
+      left: 0; right: 0;
+      text-align: center;
+      pointer-events: none;
+      padding: 0 40px;
+      line-height: 1.4;
+    }
+    .sub-line {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 4px;
+      max-width: 90%;
+      word-break: break-word;
+    }
+    /* 英文字幕 - 上方，白色 */
+    #sub-en {
+      font-size: 18px;
+      color: #ffffff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-weight: 500;
+      text-shadow:
+        -2px -2px 0 #000,
+         2px -2px 0 #000,
+        -2px  2px 0 #000,
+         2px  2px 0 #000,
+         0 0 12px rgba(0,0,0,.9);
+      margin-bottom: 8px;
+      min-height: 28px;
+    }
+    /* 原文字幕 - 下方，金黄色 */
+    #sub-orig {
+      font-size: 21px;
+      color: #FFE066;
+      font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+      font-weight: 700;
+      text-shadow:
+        -2px -2px 0 #000,
+         2px -2px 0 #000,
+        -2px  2px 0 #000,
+         2px  2px 0 #000,
+         0 0 16px rgba(0,0,0,1);
+      min-height: 32px;
+    }
+
+    /* ── 字幕控制栏 ── */
+    .subtitle-controls {
+      max-width: 1000px; margin: 20px auto 0; padding: 0 16px;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .subtitle-controls .ctrl-label { font-size: 13px; color: #666; }
+    .toggle-btn {
+      padding: 6px 16px; border-radius: 20px; font-size: 13px;
+      border: 1px solid #333; background: #1a1a22; color: #ccc;
+      cursor: pointer; transition: all .2s;
+    }
+    .toggle-btn.active { border-color: #7c6aff; background: rgba(124,106,255,.15); color: #a090ff; }
+    .toggle-btn:hover { border-color: #555; }
+
+    /* ── 处理状态 ── */
+    .status-card {
+      max-width: 1000px; margin: 24px auto; padding: 0 16px;
+    }
+    .status-inner {
+      border-radius: 12px; padding: 20px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .status-inner.processing { background: #0d1a2d; border: 1px solid #1e3a5f; }
+    .status-inner.pending    { background: #1a1a1a; border: 1px solid #2a2a2a; }
+    .status-inner.error      { background: #1a0808; border: 1px solid #3a1010; }
+    .spin { animation: spin 1s linear infinite; display: inline-block; font-size: 22px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-text h3 { font-size: 15px; margin-bottom: 4px; }
+    .status-text p  { font-size: 13px; color: #666; }
+
+    /* ── 信息栏 ── */
+    .info-section {
+      max-width: 1000px; margin: 24px auto 48px; padding: 0 16px;
+    }
+    .info-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px; margin-top: 12px;
+    }
+    .info-item {
+      background: #14141c; border: 1px solid #1e1e28;
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .info-item .label { font-size: 11px; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .info-item .value { font-size: 15px; font-weight: 600; color: #e0e0e0; }
+
+    /* 删除按钮 */
+    .delete-btn {
+      margin-left: auto; padding: 8px 20px;
+      background: transparent; border: 1px solid #3a1010;
+      color: #f87171; border-radius: 8px; font-size: 13px;
+      cursor: pointer; transition: all .2s;
+    }
+    .delete-btn:hover { background: #2a0808; border-color: #f87171; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">N<span>A</span>KE</a>
+  <div class="nav-links">
+    <a href="/videos" class="back">← 视频列表</a>
+    {% if admin %}<a href="/admin">管理</a>{% endif %}
+  </div>
+</nav>
+
+<!-- 播放器 -->
+<div class="player-section">
+  <h1 class="video-title">{{ video.title }}</h1>
+  <div class="video-meta">
+    <span>🗓 {{ video.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    {% if video.duration %}<span>⏱ {{ "%.0f"|format(video.duration // 60) }}:{{ "%02.0f"|format(video.duration % 60) }}</span>{% endif %}
+    {% if video.detected_language %}<span>🌐 语言: <b>{{ video.detected_language }}</b></span>{% endif %}
+    <span class="badge-{{ video.status }}">
+      {% if video.status == 'done' %}✅ 字幕已生成{% elif video.status == 'processing' %}⏳ 处理中{% elif video.status == 'pending' %}🕐 等待中{% else %}❌ 处理失败{% endif %}
+    </span>
+  </div>
+
+  {% if video.status == 'done' %}
+  <!-- 播放器主体 -->
+  <div class="player-wrap" id="player-wrap">
+    <video id="video-player" controls preload="metadata">
+      <source src="/api/videos/{{ video.id }}/stream" type="video/mp4">
+      <!-- 双字幕轨道（mode=hidden，由JS接管显示） -->
+      <track id="track-orig" src="/api/videos/{{ video.id }}/subtitle/orig"
+             kind="subtitles" srclang="zh" label="原文" default>
+      <track id="track-en" src="/api/videos/{{ video.id }}/subtitle/en"
+             kind="subtitles" srclang="en" label="English">
+    </video>
+
+    <!-- 自定义字幕叠加层 -->
+    <div class="subtitle-overlay">
+      <div id="sub-en"><span class="sub-line" id="sub-en-text"></span></div>
+      <div id="sub-orig"><span class="sub-line" id="sub-orig-text"></span></div>
+    </div>
+  </div>
+
+  <!-- 字幕开关 -->
+  <div class="subtitle-controls">
+    <span class="ctrl-label">字幕：</span>
+    <button class="toggle-btn active" id="btn-orig" onclick="toggleTrack('orig')">🈳 原文</button>
+    <button class="toggle-btn active" id="btn-en" onclick="toggleTrack('en')">🔤 English</button>
+    <button class="delete-btn" onclick="confirmDelete({{ video.id }})">🗑 删除视频</button>
+  </div>
+
+  {% elif video.status in ('processing', 'pending') %}
+  <!-- 处理中状态 -->
+  <div class="status-card">
+    <div class="status-inner {{ video.status }}" id="status-card">
+      <span class="spin">⚙️</span>
+      <div class="status-text">
+        <h3>{% if video.status == 'processing' %}正在生成字幕...{% else %}等待处理中...{% endif %}</h3>
+        <p>Whisper 正在识别语音并翻译，请耐心等待（通常 1-5 分钟）</p>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- 错误状态 -->
+  <div class="status-card">
+    <div class="status-inner error">
+      <span style="font-size:22px">❌</span>
+      <div class="status-text">
+        <h3>字幕生成失败</h3>
+        <p>{{ video.error_msg or '未知错误，请尝试重新上传' }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 视频信息 -->
+<div class="info-section">
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="label">文件名</div>
+      <div class="value" style="font-size:13px;word-break:break-all">{{ video.original_filename }}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">状态</div>
+      <div class="value">{{ video.status }}</div>
+    </div>
+    {% if video.detected_language %}
+    <div class="info-item">
+      <div class="label">检测语言</div>
+      <div class="value">{{ video.detected_language }}</div>
+    </div>
+    {% endif %}
+    {% if video.duration %}
+    <div class="info-item">
+      <div class="label">时长</div>
+      <div class="value">{{ "%.0f"|format(video.duration // 60) }}分{{ "%02.0f"|format(video.duration % 60) }}秒</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+{% if video.status == 'done' %}
+// ── 双字幕控制逻辑 ──
+const videoEl = document.getElementById('video-player');
+const subOrigText = document.getElementById('sub-orig-text');
+const subEnText   = document.getElementById('sub-en-text');
+const subOrigDiv  = document.getElementById('sub-orig');
+const subEnDiv    = document.getElementById('sub-en');
+
+let showOrig = true;
+let showEn   = true;
+
+// 等待字幕轨道加载
+videoEl.addEventListener('loadedmetadata', () => {
+  const tracks = videoEl.textTracks;
+  for (let i = 0; i < tracks.length; i++) {
+    tracks[i].mode = 'hidden';  // 隐藏原生字幕，交给JS处理
+  }
+  startSubtitleLoop();
+});
+
+function getActiveCue(track) {
+  if (!track || track.activeCues.length === 0) return '';
+  return Array.from(track.activeCues).map(c => c.text).join('\n');
+}
+
+function startSubtitleLoop() {
+  const tracks = videoEl.textTracks;
+  let origTrack = null, enTrack = null;
+  for (let i = 0; i < tracks.length; i++) {
+    if (tracks[i].language === 'zh') origTrack = tracks[i];
+    if (tracks[i].language === 'en') enTrack = tracks[i];
+  }
+
+  function update() {
+    const origText = origTrack ? getActiveCue(origTrack) : '';
+    const enText   = enTrack   ? getActiveCue(enTrack)   : '';
+
+    subOrigText.textContent = showOrig ? origText : '';
+    subEnText.textContent   = showEn   ? enText   : '';
+  }
+
+  // 用 timeupdate 轮询（兼容性好）
+  videoEl.addEventListener('timeupdate', update);
+  if (origTrack) origTrack.addEventListener('cuechange', update);
+  if (enTrack)   enTrack.addEventListener('cuechange', update);
+}
+
+function toggleTrack(which) {
+  if (which === 'orig') {
+    showOrig = !showOrig;
+    document.getElementById('btn-orig').classList.toggle('active', showOrig);
+    if (!showOrig) subOrigText.textContent = '';
+  } else {
+    showEn = !showEn;
+    document.getElementById('btn-en').classList.toggle('active', showEn);
+    if (!showEn) subEnText.textContent = '';
+  }
+}
+
+function confirmDelete(id) {
+  if (!confirm('确定要删除这个视频和字幕吗？此操作不可撤销。')) return;
+  fetch(`/api/videos/${id}`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => { location.href = '/videos'; })
+    .catch(() => alert('删除失败'));
+}
+
+{% elif video.status in ('processing', 'pending') %}
+// 自动轮询处理状态
+function pollStatus() {
+  fetch('/api/videos/{{ video.id }}/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'done' || data.status === 'error') {
+        location.reload();
+      } else {
+        setTimeout(pollStatus, 4000);
+      }
+    })
+    .catch(() => setTimeout(pollStatus, 6000));
+}
+setTimeout(pollStatus, 4000);
+{% endif %}
+</script>
+</body>
+</html>
